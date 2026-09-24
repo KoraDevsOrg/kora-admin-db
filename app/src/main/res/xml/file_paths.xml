@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Permite compartir temporalmente APKs guardados en la caché interna -->
+    <cache-path name="kora_apk_cache" path="apks/" />
+</paths>
