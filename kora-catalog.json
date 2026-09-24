@@ -1,0 +1,42 @@
+[
+  {
+    "id": "quiz_jp",
+    "name": "Kora Quiz Japonés",
+    "description": "Práctica interactiva de hiragana, katakana y vocabulario.",
+    "type": "WEB_APP",
+    "packageName": "org.koradevs.quiz.japon",
+    "version": "1.0.0",
+    "versionCode": 1,
+    "sourceUrl": "https://koradevsorg.github.io/quiz-japones/"
+  },
+  {
+    "id": "quiz_fr",
+    "name": "Kora Quiz Francés",
+    "description": "Práctica interactiva de vocabulario y frases en francés.",
+    "type": "WEB_APP",
+    "packageName": "org.koradevs.quiz.frances",
+    "version": "1.0.0",
+    "versionCode": 1,
+    "sourceUrl": "https://koradevsorg.github.io/quiz-frances/"
+  },
+  {
+    "id": "pinta_letras",
+    "name": "Pinta Letras Niños",
+    "description": "Juego infantil interactivo para trazar y colorear letras.",
+    "type": "WEB_APP",
+    "packageName": "org.koradevs.pinta.letras",
+    "version": "1.0.0",
+    "versionCode": 1,
+    "sourceUrl": "https://koradevsorg.github.io/pinta-letras-ninos/"
+  },
+  {
+    "id": "demo_local",
+    "name": "Consola Web de Pruebas (Offline)",
+    "description": "Consola HTML interna para probar sentencias SQL y módulos.",
+    "type": "WEB_APP",
+    "packageName": "org.koradevs.demo.console",
+    "version": "1.0.0",
+    "versionCode": 1,
+    "sourceUrl": "local://demo"
+  }
+]   
