@@ -205,16 +205,46 @@ fun DatabaseTabContent(dbHelper: KoraDbOpenHelper) {
 fun StoreTabContent(storeManager: KoraStoreManager) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    val appsList = remember { storeManager.getAvailableApps() }
+    var appsList by remember { mutableStateOf<List<KoraAppItem>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
     var operationStatus by remember { mutableStateOf("") }
+
+    // Función para refrescar desde GitHub o Caché
+    val loadCatalog: () -> Unit = {
+        coroutineScope.launch {
+            isLoading = true
+            appsList = storeManager.fetchCatalog()
+            isLoading = false
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        loadCatalog()
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        Text(text = "Ecosistema Koradevs", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-        Text(text = "Aplicaciones libres, sin publicidad y conectadas al motor local.", fontSize = 13.sp, color = Color.Gray)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(text = "Ecosistema Koradevs", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text(text = "Apps conectadas al motor local.", fontSize = 12.sp, color = Color.Gray)
+            }
+            IconButton(onClick = { loadCatalog() }) {
+                Text("🔄", fontSize = 20.sp)
+            }
+        }
+
+        if (isLoading) {
+            Spacer(modifier = Modifier.height(16.dp))
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        }
 
         if (operationStatus.isNotEmpty()) {
             Spacer(modifier = Modifier.height(8.dp))
@@ -223,60 +253,69 @@ fun StoreTabContent(storeManager: KoraStoreManager) {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            items(appsList) { app ->
-                val isInstalled = remember(app.packageName) { storeManager.isAppInstalled(app.packageName) }
+        if (!isLoading && appsList.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("No se pudo cargar el catálogo. Verifica tu conexión.", color = Color.Gray)
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(appsList) { app ->
+                    val isInstalled = remember(app.packageName) { storeManager.isAppInstalled(app.packageName) }
 
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(text = app.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            Badge(
-                                containerColor = if (app.type == KoraAppType.WEB_APP) Color(0xFF00796B) else Color(0xFFE65100)
-                            ) {
-                                Text(if (app.type == KoraAppType.WEB_APP) "WEB" else "APK", color = Color.White)
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(text = app.description, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        if (app.type == KoraAppType.WEB_APP) {
-                            Button(
-                                onClick = {
-                                    val intent = Intent(context, KoraWebViewActivity::class.java)
-                                    context.startActivity(intent)
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("Abrir Micro-App")
-                            }
-                        } else {
-                            Button(
-                                onClick = {
-                                    coroutineScope.launch {
-                                        storeManager.downloadAndInstallApk(app.sourceUrl, app.id) { status ->
-                                            operationStatus = status
-                                        }
-                                    }
-                                },
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (isInstalled) Color(0xFF455A64) else MaterialTheme.colorScheme.primary
-                                )
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(if (isInstalled) "Reinstalar / Actualizar APK" else "Descargar e Instalar APK")
+                                Text(text = app.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                Badge(
+                                    containerColor = if (app.type == KoraAppType.WEB_APP) Color(0xFF00796B) else Color(0xFFE65100)
+                                ) {
+                                    Text(if (app.type == KoraAppType.WEB_APP) "WEB" else "APK", color = Color.White)
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(text = app.description, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            if (app.type == KoraAppType.WEB_APP) {
+                                Button(
+                                    onClick = {
+                                        val intent = Intent(context, KoraWebViewActivity::class.java).apply {
+                                            putExtra(KoraWebViewActivity.EXTRA_URL, app.sourceUrl)
+                                            putExtra(KoraWebViewActivity.EXTRA_APP_NAME, app.name)
+                                        }
+                                        context.startActivity(intent)
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Abrir Aplicación")
+                                }
+                            } else {
+                                Button(
+                                    onClick = {
+                                        coroutineScope.launch {
+                                            storeManager.downloadAndInstallApk(app.sourceUrl, app.id) { status ->
+                                                operationStatus = status
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (isInstalled) Color(0xFF455A64) else MaterialTheme.colorScheme.primary
+                                    )
+                                ) {
+                                    Text(if (isInstalled) "Reinstalar / Actualizar APK" else "Descargar e Instalar APK")
+                                }
                             }
                         }
                     }

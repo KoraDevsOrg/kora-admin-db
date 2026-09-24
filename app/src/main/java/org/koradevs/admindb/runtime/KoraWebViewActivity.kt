@@ -15,10 +15,17 @@ class KoraWebViewActivity : ComponentActivity() {
     private lateinit var webView: WebView
     private lateinit var dbHelper: KoraDbOpenHelper
 
+    companion object {
+        const val EXTRA_URL = "extra_target_url"
+        const val EXTRA_APP_NAME = "extra_app_name"
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         dbHelper = KoraDbOpenHelper(this)
+
+        val targetUrl = intent.getStringExtra(EXTRA_URL) ?: "local://demo"
 
         webView = WebView(this).apply {
             settings.javaScriptEnabled = true
@@ -27,12 +34,13 @@ class KoraWebViewActivity : ComponentActivity() {
             settings.allowContentAccess = false
             settings.cacheMode = WebSettings.LOAD_DEFAULT
 
+            // Mantiene el puente nativo hacia SQLite en cualquier app web cargada
             addJavascriptInterface(KoraWebBridge(dbHelper) {}, "KoraDB")
 
             webViewClient = object : WebViewClient() {}
             webChromeClient = object : WebChromeClient() {
                 override fun onConsoleMessage(message: ConsoleMessage?): Boolean {
-                    android.util.Log.d("KORA_JS_LOG", "${message?.message()} -- From line ${message?.lineNumber()}")
+                    android.util.Log.d("KORA_JS_LOG", "${message?.message()} -- Line: ${message?.lineNumber()}")
                     return true
                 }
             }
@@ -40,6 +48,15 @@ class KoraWebViewActivity : ComponentActivity() {
 
         setContentView(webView)
 
+        if (targetUrl == "local://demo") {
+            cargarDemoInterno()
+        } else {
+            // Carga la app remota de GitHub Pages
+            webView.loadUrl(targetUrl)
+        }
+    }
+
+    private fun cargarDemoInterno() {
         val demoHtml = """
             <!DOCTYPE html>
             <html lang="es">
@@ -56,12 +73,12 @@ class KoraWebViewActivity : ComponentActivity() {
                 </style>
             </head>
             <body>
-                <h3>Micro-App: Kora Japonés</h3>
+                <h3>Consola Web Local Kora</h3>
                 <button onclick="crearModulo()">1. Registrar Módulo y Tablas</button>
-                <button onclick="insertarPalabra()">2. Insertar Palabra</button>
+                <button onclick="insertarPalabra()">2. Insertar Registro</button>
                 <button onclick="consultar()">3. Consultar Registros</button>
 
-                <p style="margin-top:16px; color:#aaa; font-size:12px;">Resultado de la base de datos:</p>
+                <p style="margin-top:16px; color:#aaa; font-size:12px;">Salida SQLite:</p>
                 <pre id="output">Esperando acción...</pre>
 
                 <script>

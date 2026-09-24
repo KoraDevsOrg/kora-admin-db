@@ -8,6 +8,7 @@ import android.os.Build
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
@@ -15,38 +16,70 @@ import java.net.URL
 
 class KoraStoreManager(private val context: Context) {
 
-    /**
-     * Catálogo integrado del ecosistema.
-     * Más adelante puede leerse de un archivo JSON alojado en GitHub.
-     */
-    fun getAvailableApps(): List<KoraAppItem> {
-        return listOf(
-            KoraAppItem(
-                id = "jp_web",
-                name = "Kora Japonés (Web)",
-                description = "Aprende Kanji, Kana y vocabulario sin anuncios.",
-                type = KoraAppType.WEB_APP,
-                packageName = "org.koradevs.japon.web",
-                version = "1.0.0",
-                versionCode = 1,
-                sourceUrl = "https://koradevs.local"
-            ),
-            KoraAppItem(
-                id = "fin_apk",
-                name = "Kora Finanzas (APK)",
-                description = "Control de ingresos y balances con persistencia local.",
-                type = KoraAppType.NATIVE_APK,
-                packageName = "org.koradevs.finanzas",
-                version = "1.0.0",
-                versionCode = 1,
-                sourceUrl = "https://github.com/koradevsorg/kora-finanzas/releases/download/v1.0.0/app-release.apk"
-            )
-        )
+    companion object {
+        private const val CATALOG_URL = "https://raw.githubusercontent.com/KoraDevsOrg/kora-admin-db/main/kora-catalog.json"
+        private const val CACHE_FILE_NAME = "kora_catalog_cache.json"
     }
 
     /**
-     * Verifica si un APK ya está instalado en el teléfono
+     * Obtiene las aplicaciones disponibles:
+     * 1. Si hay internet, descarga la última versión desde GitHub y actualiza la caché.
+     * 2. Si no hay conexión o falla, recupera la última copia guardada en disco.
      */
+    suspend fun fetchCatalog(): List<KoraAppItem> = withContext(Dispatchers.IO) {
+        val cacheFile = File(context.filesDir, CACHE_FILE_NAME)
+        var jsonString: String? = null
+
+        try {
+            val url = URL(CATALOG_URL)
+            val connection = (url.openConnection() as HttpURLConnection).apply {
+                connectTimeout = 6000
+                readTimeout = 6000
+                requestMethod = "GET"
+            }
+
+            if (connection.responseCode == HttpURLConnection.HTTP_OK) {
+                jsonString = connection.inputStream.bufferedReader().use { it.readText() }
+                // Guardar en caché local para uso offline
+                cacheFile.writeText(jsonString)
+            }
+        } catch (_: Exception) {
+            // Error de red: recurrir a la caché local
+        }
+
+        // Si la red falló, intentar leer la caché persistida
+        if (jsonString == null && cacheFile.exists()) {
+            jsonString = cacheFile.readText()
+        }
+
+        if (!jsonString.isNullOrBlank()) {
+            parseCatalogJson(jsonString)
+        } else {
+            emptyList()
+        }
+    }
+
+    private fun parseCatalogJson(jsonString: String): List<KoraAppItem> {
+        val items = mutableListOf<KoraAppItem>()
+        val jsonArray = JSONArray(jsonString)
+        for (i in 0 until jsonArray.length()) {
+            val obj = jsonArray.getJSONObject(i)
+            items.add(
+                KoraAppItem(
+                    id = obj.getString("id"),
+                    name = obj.getString("name"),
+                    description = obj.getString("description"),
+                    type = if (obj.getString("type") == "WEB_APP") KoraAppType.WEB_APP else KoraAppType.NATIVE_APK,
+                    packageName = obj.getString("packageName"),
+                    version = obj.getString("version"),
+                    versionCode = obj.getInt("versionCode"),
+                    sourceUrl = obj.getString("sourceUrl")
+                )
+            )
+        }
+        return items
+    }
+
     fun isAppInstalled(packageName: String): Boolean {
         return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -56,14 +89,11 @@ class KoraStoreManager(private val context: Context) {
                 context.packageManager.getPackageInfo(packageName, 0)
             }
             true
-        } catch (e: PackageManager.NameNotFoundException) {
+        } catch (_: PackageManager.NameNotFoundException) {
             false
         }
     }
 
-    /**
-     * Descarga el APK desde la URL e invoca el instalador nativo de Android
-     */
     suspend fun downloadAndInstallApk(apkUrl: String, fileName: String, onProgress: (String) -> Unit) {
         withContext(Dispatchers.IO) {
             try {
