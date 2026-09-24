@@ -24,3 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Kora Admin DB"
 include(":app")
+include(":kora-sdk")

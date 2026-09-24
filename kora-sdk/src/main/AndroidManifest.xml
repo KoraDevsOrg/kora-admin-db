@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Permiso obligatorio para comunicarse con Kora Admin DB -->
+    <uses-permission android:name="org.koradevs.permission.ACCESS_KORA_DB" />
+
+</manifest>
