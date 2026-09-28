@@ -38,5 +38,15 @@
     "version": "1.0.0",
     "versionCode": 1,
     "sourceUrl": "local://demo"
+  },
+  {
+  "id": "primeros_auxilios",
+  "name": "Kora Primeros Auxilios",
+  "description": "Protocolos vitales de emergencia y metrónomo RCP sin conexión.",
+  "type": "WEB_APP",
+  "packageName": "org.koradevs.salud.primerosauxilios",
+  "version": "1.0.0",
+  "versionCode": 1,
+  "sourceUrl": "https://koradevsorg.github.io/primeros-auxilios/"
   }
 ]   
