@@ -13,7 +13,9 @@ import org.koradevs.admindb.store.KoraStoreManager
 
 enum class KoraDestination {
     STORE,
-    DATABASE_CONSOLE
+    DATABASE_CONSOLE,
+    DATABASE_ADMIN,
+    P2P_SYNC
 }
 
 class KoraStoreStateHolder(
