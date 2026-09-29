@@ -78,5 +78,15 @@
     "version": "1.0.0",
     "versionCode": 1,
     "sourceUrl": "https://koradevsorg.github.io/kora-fabricacion/"
+  },
+  {
+    "id": "biz_rrhh",
+    "name": "Kora Gestión Humana (RRHH)",
+    "description": "Fichas de colaboradores, salarios, turnos y costo/minuto para fabricación y costeo.",
+    "type": "WEB_APP",
+    "packageName": "org.koradevs.negocios.rrhh",
+    "version": "1.0.0",
+    "versionCode": 1,
+    "sourceUrl": "https://koradevsorg.github.io/kora-rrhh/"
   }
 ]   
