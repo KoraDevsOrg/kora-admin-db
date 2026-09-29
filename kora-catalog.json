@@ -48,5 +48,15 @@
   "version": "1.0.0",
   "versionCode": 1,
   "sourceUrl": "https://koradevsorg.github.io/primeros-auxilios/"
-  }
+  },
+  {
+  "id": "plantas_medicinales",
+  "name": "Kora Plantas Medicinales",
+  "description": "Botánica autóctona, huertos caseros y dosificación segura sin conexión.",
+  "type": "WEB_APP",
+  "packageName": "org.koradevs.botanica.plantas",
+  "version": "1.0.0",
+  "versionCode": 1,
+  "sourceUrl": "https://koradevsorg.github.io/plantas-medicinales/"
+}
 ]   
