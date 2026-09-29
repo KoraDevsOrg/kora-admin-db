@@ -11,15 +11,20 @@ import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.enableEdgeToEdge
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import org.koradevs.admindb.db.KoraDbOpenHelper
 
 class KoraWebViewActivity : ComponentActivity() {
 
     private lateinit var webView: WebView
     private lateinit var dbHelper: KoraDbOpenHelper
+    private lateinit var ttsBridge: KoraTTSBridge
 
     companion object {
         const val EXTRA_URL = "extra_target_url"
@@ -30,12 +35,17 @@ class KoraWebViewActivity : ComponentActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         dbHelper = KoraDbOpenHelper(this)
 
-        // Solicitar permisos de audio (micrófono) si no están concedidos
         checkAndRequestAudioPermissions()
 
         val targetUrl = intent.getStringExtra(EXTRA_URL) ?: "local://demo"
+        val appName = intent.getStringExtra(EXTRA_APP_NAME) ?: "Mini App Kora"
+
+        ttsBridge = KoraTTSBridge(this) { status ->
+            Log.d("KORA_TTS", status)
+        }
 
         webView = WebView(this).apply {
             settings.javaScriptEnabled = true
@@ -43,15 +53,15 @@ class KoraWebViewActivity : ComponentActivity() {
             settings.allowFileAccess = false
             settings.allowContentAccess = false
             settings.cacheMode = WebSettings.LOAD_DEFAULT
-            settings.mediaPlaybackRequiresUserGesture = false // Permite reproducción de audio/video sin gesto de usuario
+            settings.mediaPlaybackRequiresUserGesture = false
 
-            // Mantiene el puente nativo hacia SQLite en cualquier app web cargada
+            // Puentes JavaScript nativos: SQLite (KoraDB) y Síntesis de Voz (KoraTTS)
             addJavascriptInterface(KoraWebBridge(dbHelper) {}, "KoraDB")
+            addJavascriptInterface(ttsBridge, "KoraTTS")
 
             webViewClient = object : WebViewClient() {}
             webChromeClient = object : WebChromeClient() {
                 override fun onPermissionRequest(request: PermissionRequest?) {
-                    // Concede automáticamente permisos solicitados por la Web App (como micrófono / audio)
                     request?.resources?.let { resources ->
                         request.grant(resources)
                     }
@@ -64,12 +74,18 @@ class KoraWebViewActivity : ComponentActivity() {
             }
         }
 
+        // Aplicar insets de sistema para evitar solapamiento con barras de estado y navegación
+        ViewCompat.setOnApplyWindowInsetsListener(webView) { view, windowInsets ->
+            val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
+            view.setPadding(insets.left, insets.top, insets.right, insets.bottom)
+            WindowInsetsCompat.CONSUMED
+        }
+
         setContentView(webView)
 
         if (targetUrl == "local://demo") {
-            cargarDemoInterno()
+            cargarDemoInterno(appName)
         } else {
-            // Carga la app remota de GitHub Pages
             webView.loadUrl(targetUrl)
         }
     }
@@ -84,77 +100,84 @@ class KoraWebViewActivity : ComponentActivity() {
         }
     }
 
-    private fun cargarDemoInterno() {
+    override fun onDestroy() {
+        super.onDestroy()
+        ttsBridge.shutdown()
+    }
+
+    private fun cargarDemoInterno(appName: String) {
         val demoHtml = """
             <!DOCTYPE html>
             <html lang="es">
             <head>
                 <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Kora Web Demo & Audio Sandbox</title>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+                <title>$appName</title>
                 <style>
-                    body { font-family: sans-serif; padding: 16px; background: #121212; color: #fff; }
-                    button { background: #2E7D32; color: white; border: none; padding: 14px; border-radius: 8px; width: 100%; margin: 6px 0; font-size: 15px; font-weight: bold; cursor: pointer; }
-                    button:active { background: #1B5E20; }
-                    pre { background: #1e1e1e; padding: 12px; border-radius: 6px; overflow-x: auto; color: #81C784; font-size: 13px; max-height: 250px; }
-                    .error { color: #E57373 !important; }
+                    body { font-family: sans-serif; padding: env(safe-area-inset-top, 20px) 20px env(safe-area-inset-bottom, 20px) 20px; background: #FFF9C4; color: #333; text-align: center; }
+                    h1 { color: #E65100; font-size: 28px; }
+                    button { background: #4CAF50; color: white; border: none; padding: 18px 24px; border-radius: 16px; width: 100%; margin: 10px 0; font-size: 18px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+                    button:active { background: #388E3C; transform: scale(0.98); }
+                    .tts-btn { background: #FF9800; }
+                    pre { background: #FFF; padding: 14px; border-radius: 12px; overflow-x: auto; color: #2E7D32; font-size: 15px; text-align: left; border: 2px dashed #81C784; }
                 </style>
             </head>
             <body>
-                <h3>Consola Web Local Kora & Audio</h3>
-                <button onclick="probarMicrofono()">🎙️ Probar Micrófono (MediaRecorder)</button>
-                <button onclick="crearModulo()">1. Registrar Módulo y Tablas</button>
-                <button onclick="insertarPalabra()">2. Insertar Registro</button>
-                <button onclick="consultar()">3. Consultar Registros</button>
+                <h1>🌟 $appName 🌟</h1>
+                <p style="font-size: 16px; font-weight: bold; color: #555;">Aplicación accesible con voz asistida para niños y adultos.</p>
 
-                <p style="margin-top:16px; color:#aaa; font-size:12px;>Salida:</p>
-                <pre id="output">Esperando acción...</pre>
+                <button class="tts-btn" onclick="hablarTexto('Bienvenido a la aplicación educativa Kora. Toca los botones para interactuar.')">🔊 Escuchar Bienvenida</button>
+                <button onclick="crearModulo()">1. Registrar Módulo y Base de Datos</button>
+                <button onclick="insertarPalabra()">2. Guardar Registro Local</button>
+                <button onclick="consultar()">3. Leer Registros Guardados</button>
+
+                <p style="margin-top:20px; font-weight:bold;">Estado SQLite y Voz:</p>
+                <pre id="output">Listo para interactuar...</pre>
 
                 <script>
-                    function mostrar(data, esError = false) {
-                        const out = document.getElementById('output');
-                        out.className = esError ? 'error' : '';
-                        out.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+                    function hablarTexto(texto) {
+                        try {
+                            window.KoraTTS.speak(texto);
+                        } catch(e) {
+                            console.log("TTS Error: " + e.message);
+                        }
                     }
 
-                    async function probarMicrofono() {
-                        try {
-                            mostrar("Solicitando acceso al micrófono...");
-                            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                            mostrar("¡Micrófono concedido con éxito! Tracks activos: " + stream.getAudioTracks().length);
-                        } catch(e) {
-                            mostrar("Error de Micrófono: " + e.message, true);
-                        }
+                    function mostrar(data, esError = false) {
+                        const out = document.getElementById('output');
+                        const textStr = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+                        out.textContent = textStr;
+                        hablarTexto(textStr);
                     }
 
                     function crearModulo() {
                         try {
-                            const ddl = "CREATE TABLE IF NOT EXISTS mod_jp_palabras (id INTEGER PRIMARY KEY AUTOINCREMENT, kanji TEXT, kana TEXT, significado TEXT);";
-                            const res = window.KoraDB.registerModule("org.koradevs.japon.web", "Kora Japonés Web", 1, ddl);
-                            mostrar(JSON.parse(res));
+                            val ddl = "CREATE TABLE IF NOT EXISTS mod_aprender (id INTEGER PRIMARY KEY AUTOINCREMENT, palabra TEXT, significado TEXT);";
+                            const res = window.KoraDB.registerModule("org.koradevs.aprender", "Aprender Jugando", 1, ddl);
+                            mostrar("Módulo registrado correctamente en el núcleo.");
                         } catch(e) {
-                            mostrar("Error JS: " + e.message, true);
+                            mostrar("Error al registrar módulo: " + e.message);
                         }
                     }
 
                     function insertarPalabra() {
                         try {
-                            const res = window.KoraDB.execute(
-                                "INSERT INTO mod_jp_palabras (kanji, kana, significado) VALUES (?, ?, ?)",
-                                JSON.stringify(["日本語", "にほんご", "Idioma japonés"])
+                            window.KoraDB.execute(
+                                "INSERT INTO mod_aprender (palabra, significado) VALUES (?, ?)",
+                                JSON.stringify(["Manzana", "Fruta roja y dulce para comer"])
                             );
-                            mostrar(JSON.parse(res));
+                            mostrar("¡Guardado exitoso! Palabra: Manzana.");
                         } catch(e) {
-                            mostrar("Error JS: " + e.message, true);
+                            mostrar("Error al insertar: " + e.message);
                         }
                     }
 
                     function consultar() {
                         try {
-                            const res = window.KoraDB.query("SELECT * FROM mod_jp_palabras");
+                            const res = window.KoraDB.query("SELECT * FROM mod_aprender");
                             mostrar(JSON.parse(res));
                         } catch(e) {
-                            mostrar("Error JS: " + e.message, true);
+                            mostrar("Error al consultar: " + e.message);
                         }
                     }
                 </script>
