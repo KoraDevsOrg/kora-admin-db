@@ -58,5 +58,16 @@
   "version": "1.0.0",
   "versionCode": 1,
   "sourceUrl": "https://koradevsorg.github.io/plantas-medicinales/"
-}
+},
+  {
+  "id": "biz_inventario",
+  "name": "Kora Inventario y Recetas",
+  "description": "Control de stock, materias primas y escandallo unitario automático por lote.",
+  "type": "WEB_APP",
+  "packageName": "org.koradevs.negocios.inventario",
+  "version": "1.0.0",
+  "versionCode": 1,
+  "sourceUrl": "https://koradevsorg.github.io/kora-inventario/"
+  }
+  
 ]   
