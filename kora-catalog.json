@@ -82,7 +82,7 @@
   {
     "id": "biz_rrhh",
     "name": "Kora Gestión Humana (RRHH)",
-    "description": "Fichas de colaboradores, salarios, turnos y costo/minuto para fabricación y costeo.",
+    "description": "Nómina legal, control de asistencia, horas extras, novedades, hoja de vida y RBAC.",
     "type": "WEB_APP",
     "packageName": "org.koradevs.negocios.rrhh",
     "version": "1.0.0",
