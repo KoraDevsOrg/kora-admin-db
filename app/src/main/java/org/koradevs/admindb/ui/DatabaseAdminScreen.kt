@@ -1,5 +1,6 @@
 package org.koradevs.admindb.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,6 +14,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -33,6 +35,9 @@ fun DatabaseAdminScreen() {
     var statusMessage by remember { mutableStateOf("") }
     var isRefreshing by remember { mutableStateOf(false) }
 
+    // Estado para el visor visual de datos de una tabla seleccionada
+    var selectedTableForView by remember { mutableStateOf<String?>(null) }
+
     val reload = {
         tables = inspector.getAllTables()
     }
@@ -49,14 +54,14 @@ fun DatabaseAdminScreen() {
             color = MaterialTheme.colorScheme.primary
         )
         Text(
-            text = "Local-First • WAL • PK/FK • Scopes Seguros",
+            text = "Local-First • Prioridad Local ante Git • Búsqueda Visual",
             fontSize = 13.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Botones de Mantenimiento y Git Sync
+        // Botones de Mantenimiento y Git Sync (Respetando datos locales de usuario)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -81,10 +86,10 @@ fun DatabaseAdminScreen() {
                 onClick = {
                     coroutineScope.launch {
                         isRefreshing = true
-                        statusMessage = "Sincronizando con GitHub..."
+                        statusMessage = "Sincronizando catálogo con GitHub (respetando datos locales)..."
                         val result = gitManager.forceResync()
                         statusMessage = if (result.isSuccess) {
-                            "¡Git Sync exitoso! Apps: ${result.getOrNull()}"
+                            "¡Git Sync exitoso! Catálogo actualizado (datos de usuario intactos)."
                         } else {
                             "Error Git Sync: ${result.exceptionOrNull()?.localizedMessage}"
                         }
@@ -95,7 +100,7 @@ fun DatabaseAdminScreen() {
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00796B))
             ) {
-                Text("🔄 Re-sync Git")
+                Text("🔄 Re-sync Git Safe")
             }
         }
 
@@ -116,7 +121,7 @@ fun DatabaseAdminScreen() {
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-        Text(text = "Estructura y Esquema de Tablas", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Text(text = "Tablas del Sistema (Toca para ver datos)", fontSize = 16.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
 
         if (tables.isEmpty()) {
@@ -130,7 +135,9 @@ fun DatabaseAdminScreen() {
             ) {
                 items(tables) { table ->
                     Card(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { selectedTableForView = table.tableName },
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(
                             containerColor = if (table.scope == DataScope.LOCAL_SCOPE)
@@ -173,19 +180,19 @@ fun DatabaseAdminScreen() {
                                 color = MaterialTheme.colorScheme.primary
                             )
 
-                            if (table.foreignKeys.isNotEmpty()) {
-                                Text(
-                                    text = "FKs: " + table.foreignKeys.joinToString { "${it.column} ➔ ${it.parentTable}(${it.parentColumn})" },
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.outline
-                                )
-                            }
-
                             Spacer(modifier = Modifier.height(10.dp))
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
+                                Button(
+                                    onClick = { selectedTableForView = table.tableName },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text("🔍 Ver Datos y Buscar")
+                                }
+
                                 OutlinedButton(
                                     onClick = {
                                         inspector.purgeTableData(table.tableName)
@@ -195,21 +202,132 @@ fun DatabaseAdminScreen() {
                                     modifier = Modifier.weight(1f),
                                     shape = RoundedCornerShape(8.dp)
                                 ) {
-                                    Text("🧹 Vaciar Tabla")
+                                    Text("🧹 Vaciar")
                                 }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
-                                if (table.scope == DataScope.SHARED_SCOPE) {
-                                    OutlinedButton(
-                                        onClick = {
-                                            inspector.dropOrphanTable(table.tableName)
-                                            reload()
-                                            statusMessage = "Tabla ${table.tableName} eliminada"
-                                        },
-                                        modifier = Modifier.weight(1f),
-                                        shape = RoundedCornerShape(8.dp),
-                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFC62828))
-                                    ) {
-                                        Text("🗑️ Drop Módulo")
+    // Diálogo / Pantalla Visual de Datos de la Tabla Seleccionada con Búsqueda y Filtro
+    selectedTableForView?.let { tableName ->
+        TableDataViewerDialog(
+            tableName = tableName,
+            inspector = inspector,
+            onDismiss = { selectedTableForView = null }
+        )
+    }
+}
+
+@Composable
+fun TableDataViewerDialog(
+    tableName: String,
+    inspector: DatabaseInspectorHelper,
+    onDismiss: () -> Unit
+) {
+    var rawRows by remember { mutableStateOf(inspector.getTableRows(tableName)) }
+    var searchQuery by remember { mutableStateOf("") }
+
+    val filteredRows = remember(rawRows, searchQuery) {
+        if (searchQuery.isBlank()) {
+            rawRows
+        } else {
+            rawRows.filter { rowMap ->
+                rowMap.values.any { value ->
+                    value.contains(searchQuery, ignoreCase = true)
+                }
+            }
+        }
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.85f),
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "📋 Tabla: $tableName",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "Total filas: ${rawRows.size} • Filtradas: ${filteredRows.size}",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    TextButton(onClick = onDismiss) {
+                        Text("Cerrar", fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Barra de búsqueda y filtrado fácil
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("🔎 Buscar en cualquier columna...") },
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                if (filteredRows.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize().weight(1f), contentAlignment = Alignment.Center) {
+                        Text("No se encontraron registros.", color = Color.Gray)
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth().weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(filteredRows) { rowMap ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    rowMap.forEach { (colName, colVal) ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(
+                                                text = "$colName:",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 12.sp,
+                                                color = MaterialTheme.colorScheme.secondary,
+                                                modifier = Modifier.width(110.dp)
+                                            )
+                                            Text(
+                                                text = colVal,
+                                                fontSize = 12.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                        }
                                     }
                                 }
                             }

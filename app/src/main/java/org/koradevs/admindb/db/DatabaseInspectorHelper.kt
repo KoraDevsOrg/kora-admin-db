@@ -1,8 +1,7 @@
 package org.koradevs.admindb.db
 
+import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
-import org.json.JSONArray
-import org.json.JSONObject
 
 data class ColumnInfo(
     val name: String,
@@ -93,6 +92,31 @@ class DatabaseInspectorHelper(private val dbHelper: KoraDbOpenHelper) {
         } catch (e: Exception) {
             0L
         }
+    }
+
+    fun getTableRows(tableName: String, limit: Int = 200): List<Map<String, String>> {
+        val rows = mutableListOf<Map<String, String>>()
+        val db = dbHelper.readableDatabase
+        try {
+            val cursor = db.rawQuery("SELECT * FROM \"$tableName\" LIMIT $limit", null)
+            val columnNames = cursor.columnNames
+            while (cursor.moveToNext()) {
+                val rowMap = mutableMapOf<String, String>()
+                for (col in columnNames) {
+                    val colIndex = cursor.getColumnIndex(col)
+                    val value = when (cursor.getType(colIndex)) {
+                        Cursor.FIELD_TYPE_NULL -> "NULL"
+                        Cursor.FIELD_TYPE_BLOB -> "[BLOB]"
+                        else -> cursor.getString(colIndex) ?: ""
+                    }
+                    rowMap[col] = value
+                }
+                rows.add(rowMap)
+            }
+            cursor.close()
+        } catch (_: Exception) {
+        }
+        return rows
     }
 
     fun purgeTableData(tableName: String): Boolean {
